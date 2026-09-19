@@ -16,41 +16,45 @@ try {
 
 [xml]$xamlDoc = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        Title="Folder Tunnel" Height="560" Width="620" WindowStartupLocation="CenterScreen"
-        Background="#12141C" ResizeMode="CanMinimize">
+        Title="Folder Tunnel" Height="580" Width="620" WindowStartupLocation="CenterScreen"
+        Background="#F4F5F7" ResizeMode="CanMinimize">
   <StackPanel Margin="20">
-    <TextBlock Text="FOLDER TUNNEL" Foreground="White" FontSize="20" FontWeight="Bold"/>
-    <TextBlock Text="Share folder ke internet tanpa install apa-apa" Foreground="#9AA0AE" FontSize="12" Margin="0,2,0,16"/>
-    <TextBlock Text="Folder yang di-share:" Foreground="#E6E6E6"/>
+    <TextBlock Text="FOLDER TUNNEL" Foreground="#111827" FontSize="20" FontWeight="Bold"/>
+    <TextBlock Text="Share folder ke internet tanpa install apa-apa" Foreground="#6B7280" FontSize="12" Margin="0,2,0,16"/>
+    <TextBlock Text="Folder yang di-share:" Foreground="#374151"/>
     <DockPanel Margin="0,4,0,12">
       <Button Name="BtnBrowse" Content="Pilih folder..." Width="110" Height="30" DockPanel.Dock="Right" Margin="8,0,0,0"/>
-      <TextBox Name="TxtFolder" Height="30" VerticalContentAlignment="Center" Background="#1B1E29" Foreground="#E6E6E6" BorderBrush="#2A2D3A" Padding="6,0" IsReadOnly="True"/>
+      <TextBox Name="TxtFolder" Height="30" VerticalContentAlignment="Center" Background="White" Foreground="#111827" BorderBrush="#D1D5DB" Padding="6,0" IsReadOnly="True"/>
     </DockPanel>
-    <TextBlock Text="Password (opsional, kosong = bebas akses):" Foreground="#E6E6E6"/>
-    <PasswordBox Name="PwPass" Height="30" Background="#1B1E29" Foreground="#E6E6E6" BorderBrush="#2A2D3A" Padding="6,0" Margin="0,4,0,12"/>
-    <CheckBox Name="ChkUpload" Content="Izin upload file dari browser" Foreground="#E6E6E6" IsChecked="True" Margin="0,0,0,4"/>
-    <CheckBox Name="ChkDelete" Content="Izin hapus file dari browser" Foreground="#E6E6E6" Margin="0,0,0,12"/>
+    <TextBlock Text="Password (opsional, kosong = bebas akses):" Foreground="#374151"/>
+    <PasswordBox Name="PwPass" Height="30" Background="White" Foreground="#111827" BorderBrush="#D1D5DB" Padding="6,0" Margin="0,4,0,12"/>
+    <CheckBox Name="ChkUpload" Content="Izin upload file dari browser" Foreground="#374151" IsChecked="True" Margin="0,0,0,4"/>
+    <CheckBox Name="ChkDelete" Content="Izin hapus file dari browser" Foreground="#374151" Margin="0,0,0,12"/>
     <WrapPanel Margin="0,0,0,12">
-      <Button Name="BtnInternet" Content="Share ke INTERNET" Width="150" Height="36" Background="#2F6FD6" Foreground="White" FontWeight="Bold" Margin="0,0,8,0"/>
-      <Button Name="BtnLocal" Content="Server lokal saja" Width="130" Height="36" Margin="0,0,8,0"/>
-      <Button Name="BtnStop" Content="Stop semua" Width="100" Height="36" Margin="0,0,8,0"/>
-      <Button Name="BtnOpen" Content="Buka browser" Width="110" Height="36" IsEnabled="False"/>
+      <Button Name="BtnInternet" Content="Share ke INTERNET" Width="150" Height="36" Background="#2563EB" Foreground="White" FontWeight="Bold" Margin="0,0,8,0"/>
+      <Button Name="BtnLocal" Content="Server lokal saja" Width="130" Height="36" Background="White" BorderBrush="#D1D5DB" Margin="0,0,8,0"/>
+      <Button Name="BtnStop" Content="Stop semua" Width="100" Height="36" Background="White" BorderBrush="#D1D5DB" Margin="0,0,8,0"/>
+      <Button Name="BtnOpen" Content="Buka browser" Width="110" Height="36" Background="White" BorderBrush="#D1D5DB" IsEnabled="False"/>
     </WrapPanel>
-    <Border Background="#1B1E29" BorderBrush="#2F6FD6" BorderThickness="1" CornerRadius="4" Padding="10" Margin="0,0,0,12">
+    <StackPanel Name="PnlDl" Visibility="Collapsed" Margin="0,0,0,12">
+      <TextBlock Name="LblDl" Text="Mengunduh cloudflared..." Foreground="#374151" FontSize="11" Margin="0,0,0,3"/>
+      <ProgressBar Name="PbDl" Height="14" Minimum="0" Maximum="100"/>
+    </StackPanel>
+    <Border Background="White" BorderBrush="#2563EB" BorderThickness="1" CornerRadius="4" Padding="10" Margin="0,0,0,12">
       <StackPanel>
-        <TextBlock Text="URL PUBLIK" Foreground="#9AA0AE" FontSize="11"/>
-        <TextBlock Name="LblUrl" Text="belum aktif" Foreground="#7AB7FF" FontSize="14" FontWeight="Bold" TextWrapping="Wrap" Margin="0,2,0,0"/>
+        <TextBlock Text="URL PUBLIK" Foreground="#6B7280" FontSize="11"/>
+        <TextBlock Name="LblUrl" Text="belum aktif" Foreground="#2563EB" FontSize="14" FontWeight="Bold" TextWrapping="Wrap" Margin="0,2,0,0"/>
       </StackPanel>
     </Border>
-    <TextBlock Text="LOG" Foreground="#9AA0AE" FontSize="11"/>
-    <TextBox Name="TxtLog" Height="150" IsReadOnly="True" Background="#0D0F15" Foreground="#9FE6A0" FontFamily="Consolas" FontSize="11" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" TextWrapping="Wrap" Margin="0,4,0,0"/>
+    <TextBlock Text="LOG" Foreground="#6B7280" FontSize="11"/>
+    <TextBox Name="TxtLog" Height="150" IsReadOnly="True" Background="White" Foreground="#1F2937" FontFamily="Consolas" FontSize="11" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" TextWrapping="Wrap" Margin="0,4,0,0" BorderBrush="#E5E7EB"/>
   </StackPanel>
 </Window>
 "@
 
 $reader = New-Object System.Xml.XmlNodeReader $xamlDoc
 $win = [System.Windows.Markup.XamlReader]::Load($reader)
-foreach ($n in "BtnBrowse","TxtFolder","PwPass","ChkUpload","ChkDelete","BtnInternet","BtnLocal","BtnStop","BtnOpen","LblUrl","TxtLog") {
+foreach ($n in "BtnBrowse","TxtFolder","PwPass","ChkUpload","ChkDelete","BtnInternet","BtnLocal","BtnStop","BtnOpen","LblUrl","TxtLog","PnlDl","PbDl","LblDl") {
   Set-Variable -Name $n -Value $win.FindName($n) -Scope Script
 }
 
@@ -113,15 +117,32 @@ function Start-Tunnel {
 }
 
 function Start-Download {
-  Log "Mengunduh cloudflared (portable ~15MB, sekali saja)..."
+  Log "Mengunduh cloudflared (portable ~55MB, sekali saja)..."
   $script:BtnInternet.IsEnabled = $false
-  $script:dlHash = @{ ok = $false; error = $null }
+  $script:PnlDl.Visibility = "Visible"
+  $script:PbDl.Value = 0
+  $script:PbDl.IsIndeterminate = $false
+  $script:LblDl.Text = "Menghubungkan..."
+  $script:dlHash = [hashtable]::Synchronized(@{ ok = $false; error = $null; received = 0; total = 0 })
   $sb = {
     param($dst, $hash)
     try {
-      $ProgressPreference = "SilentlyContinue"
+      $url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
       $tmp = "$dst.download"
-      Invoke-WebRequest "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile $tmp -UseBasicParsing
+      $req = [System.Net.WebRequest]::Create($url)
+      $req.AllowAutoRedirect = $true
+      $resp = $req.GetResponse()
+      $hash.total = [long]$resp.ContentLength
+      $in = $resp.GetResponseStream()
+      $out = [System.IO.File]::Create($tmp)
+      $buf = New-Object byte[] 65536
+      while ($true) {
+        $n = $in.Read($buf, 0, $buf.Length)
+        if ($n -le 0) { break }
+        $out.Write($buf, 0, $n)
+        $hash.received = $hash.received + $n
+      }
+      $out.Close(); $in.Close(); $resp.Close()
       if (Test-Path $dst) { Remove-Item $dst -Force }
       Move-Item $tmp $dst -Force
       $hash.ok = $true
@@ -204,14 +225,25 @@ $script:timer.Interval = [TimeSpan]::FromMilliseconds(800)
 $script:timer.Add_Tick({
   try {
     if ($script:dlPs) {
-      $script:dlTicks = ($script:dlTicks + 1) % 6
-      if ($script:dlTicks -eq 0) { Log "Masih mengunduh cloudflared... (butuh internet, ±30 dtk)" }
+      $r = [long]$script:dlHash.received
+      $t = [long]$script:dlHash.total
+      if ($t -gt 0) {
+        $pct = [math]::Min(100, [int](100 * $r / $t))
+        $script:PbDl.IsIndeterminate = $false
+        $script:PbDl.Value = $pct
+        $script:LblDl.Text = ("Mengunduh cloudflared: {0:N1} MB / {1:N1} MB  ({2}%)" -f ($r / 1MB), ($t / 1MB), $pct)
+      } else {
+        $script:PbDl.IsIndeterminate = $true
+        $script:LblDl.Text = ("Mengunduh cloudflared: {0:N1} MB" -f ($r / 1MB))
+      }
     }
     if ($script:dlHandle -and $script:dlHandle.IsCompleted) {
       $null = $script:dlPs.EndInvoke($script:dlHandle)
       $script:BtnInternet.IsEnabled = $true
       $script:dlPs = $null
       $script:dlHandle = $null
+      $script:PnlDl.Visibility = "Collapsed"
+      $script:PbDl.Value = 0
       if ($script:dlHash.error) {
         Log "GAGAL download cloudflared: $($script:dlHash.error)"
       } else {
