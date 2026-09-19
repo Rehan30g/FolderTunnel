@@ -123,30 +123,47 @@ function Start-Download {
   $script:PbDl.Value = 0
   $script:PbDl.IsIndeterminate = $false
   $script:LblDl.Text = "Menghubungkan..."
-  $script:dlHash = [hashtable]::Synchronized(@{ ok = $false; error = $null; received = 0; total = 0 })
+  $script:dlHash = [hashtable]::Synchronized(@{ ok = $false; error = $null; total = 0 })
   $sb = {
     param($dst, $hash)
+    $url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
+    $tmp = "$dst.download"
     try {
-      $url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
-      $tmp = "$dst.download"
-      $req = [System.Net.WebRequest]::Create($url)
-      $req.AllowAutoRedirect = $true
-      $resp = $req.GetResponse()
-      $hash.total = [long]$resp.ContentLength
-      $in = $resp.GetResponseStream()
-      $out = [System.IO.File]::Create($tmp)
-      $buf = New-Object byte[] 65536
-      while ($true) {
-        $n = $in.Read($buf, 0, $buf.Length)
-        if ($n -le 0) { break }
-        $out.Write($buf, 0, $n)
-        $hash.received = $hash.received + $n
+      try { [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 } catch {}
+      $curl = Join-Path $env:SystemRoot "System32\curl.exe"
+      if (Test-Path $curl) {
+        try {
+          $head = & $curl -sIL --connect-timeout 15 --max-time 30 $url 2>$null
+          $m = ($head | Select-String -Pattern "content-length:\s*(\d+)" -AllMatches).Matches
+          if ($m.Count -gt 0) { $hash.total = [long]$m[$m.Count - 1].Groups[1].Value }
+        } catch {}
+        $null = & $curl -L -sS --retry 3 --retry-delay 2 --connect-timeout 20 -o $tmp $url 2>"$tmp.err"
+        if ($LASTEXITCODE -ne 0) { throw "curl exit code $LASTEXITCODE" }
+      } else {
+        $req = [System.Net.WebRequest]::Create($url)
+        $req.AllowAutoRedirect = $true
+        $req.Timeout = 30000
+        $resp = $req.GetResponse()
+        $hash.total = [long]$resp.ContentLength
+        $in = $resp.GetResponseStream()
+        $out = [System.IO.File]::Create($tmp)
+        $buf = New-Object byte[] 65536
+        while ($true) {
+          $n = $in.Read($buf, 0, $buf.Length)
+          if ($n -le 0) { break }
+          $out.Write($buf, 0, $n)
+        }
+        $out.Close(); $in.Close(); $resp.Close()
       }
-      $out.Close(); $in.Close(); $resp.Close()
+      if (-not (Test-Path $tmp) -or (Get-Item $tmp).Length -lt 1000000) { throw "file unduhan tidak lengkap" }
       if (Test-Path $dst) { Remove-Item $dst -Force }
       Move-Item $tmp $dst -Force
       $hash.ok = $true
-    } catch { $hash.error = $_.Exception.Message }
+    } catch {
+      $hash.error = $_.Exception.Message
+      if (Test-Path $tmp) { Remove-Item $tmp -Force -ErrorAction SilentlyContinue }
+      Remove-Item "$tmp.err" -Force -ErrorAction SilentlyContinue
+    }
   }
   $script:dlPs = [powershell]::Create()
   $null = $script:dlPs.AddScript($sb).AddArgument($cloudflared).AddArgument($script:dlHash)
@@ -225,16 +242,23 @@ $script:timer.Interval = [TimeSpan]::FromMilliseconds(800)
 $script:timer.Add_Tick({
   try {
     if ($script:dlPs) {
-      $r = [long]$script:dlHash.received
+      $tmp = "$cloudflared.download"
+      $r = 0
+      if (Test-Path -LiteralPath $tmp) { $r = (Get-Item -LiteralPath $tmp -ErrorAction SilentlyContinue).Length }
       $t = [long]$script:dlHash.total
-      if ($t -gt 0) {
-        $pct = [math]::Min(100, [int](100 * $r / $t))
-        $script:PbDl.IsIndeterminate = $false
-        $script:PbDl.Value = $pct
-        $script:LblDl.Text = ("Mengunduh cloudflared: {0:N1} MB / {1:N1} MB  ({2}%)" -f ($r / 1MB), ($t / 1MB), $pct)
+      if ($r -gt 0) {
+        if ($t -gt 0) {
+          $pct = [math]::Min(100, [int](100 * $r / $t))
+          $script:PbDl.IsIndeterminate = $false
+          $script:PbDl.Value = $pct
+          $script:LblDl.Text = ("Mengunduh cloudflared: {0:N1} MB / {1:N1} MB  ({2}%)" -f ($r / 1MB), ($t / 1MB), $pct)
+        } else {
+          $script:PbDl.IsIndeterminate = $true
+          $script:LblDl.Text = ("Mengunduh cloudflared: {0:N1} MB terunduh..." -f ($r / 1MB))
+        }
       } else {
         $script:PbDl.IsIndeterminate = $true
-        $script:LblDl.Text = ("Mengunduh cloudflared: {0:N1} MB" -f ($r / 1MB))
+        $script:LblDl.Text = "Menghubungkan ke github.com... (max ~35 dtk, gagal = otomatis retry)"
       }
     }
     if ($script:dlHandle -and $script:dlHandle.IsCompleted) {
@@ -244,6 +268,7 @@ $script:timer.Add_Tick({
       $script:dlHandle = $null
       $script:PnlDl.Visibility = "Collapsed"
       $script:PbDl.Value = 0
+      $script:PbDl.IsIndeterminate = $false
       if ($script:dlHash.error) {
         Log "GAGAL download cloudflared: $($script:dlHash.error)"
       } else {
