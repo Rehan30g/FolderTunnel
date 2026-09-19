@@ -89,6 +89,19 @@ function Test-Auth($ctx) {
   return $false
 }
 
+function Show-Listing-Fallback($ctx, [string]$full) {
+  $cur = $full
+  while (-not (Test-Path -LiteralPath $cur)) {
+    $parent = [System.IO.Path]::GetDirectoryName($cur)
+    if ([string]::IsNullOrEmpty($parent) -or -not ($parent + "\").StartsWith($Root + "\", [System.StringComparison]::OrdinalIgnoreCase)) { Send-Error $ctx 404 "Tidak ditemukan"; return }
+    $cur = $parent
+  }
+  $item = Get-Item -LiteralPath $cur -Force
+  if (-not $item.PSIsContainer) { Send-Error $ctx 404 "Tidak ditemukan"; return }
+  $rel = $cur.Substring($Root.Length).TrimStart("\").Replace("\", "/")
+  Show-Listing $ctx $rel
+}
+
 function Show-Listing($ctx, [string]$rel) {
   $full = Get-SafePath $rel
   $relNorm = $rel.Replace("\", "/").Trim("/")
@@ -105,7 +118,7 @@ function Show-Listing($ctx, [string]$rel) {
   $items = @(Get-ChildItem -LiteralPath $full -Force | Sort-Object @{Expression={$_.PSIsContainer};Descending=$true}, Name)
   foreach ($it in $items) {
     $r = if ($relNorm) { $relNorm + "/" + $it.Name } else { $it.Name }
-    $er = [System.Uri]::EscapeDataString($r)
+    $er = ($r.Split("/") | ForEach-Object { [System.Uri]::EscapeDataString($_) }) -join "/"
     $changed = $it.LastWriteTime.ToString("yyyy-MM-dd HH:mm")
     if ($it.PSIsContainer) {
       $rows += "<tr><td class='name'><a href='?p=$er'>$(Esc $it.Name)</a></td><td><span class='type'>Folder</span></td><td class='meta size'>&mdash;</td><td class='meta hide-mobile'>$changed</td><td class='actions'><a class='action' href='?p=$er'>Buka</a></td></tr>"
@@ -116,7 +129,7 @@ function Show-Listing($ctx, [string]$rel) {
         $actions += "<a class='action danger' href='?del=$er' onclick=`"return confirm('Hapus file ini?')`">Hapus</a>"
       }
       $extLabel = if ($it.Extension) { $it.Extension.TrimStart(".").ToUpperInvariant() } else { "File" }
-      $rows += "<tr><td class='name'><a href='?dl=$er'>$(Esc $it.Name)</a></td><td><span class='type'>$(Esc $extLabel)</span></td><td class='meta size'>$sz</td><td class='meta hide-mobile'>$changed</td><td class='actions'>$actions</td></tr>"
+      $rows += "<tr><td class='name'><a href='/$er'>$(Esc $it.Name)</a></td><td><span class='type'>$(Esc $extLabel)</span></td><td class='meta size'>$sz</td><td class='meta hide-mobile'>$changed</td><td class='actions'>$actions</td></tr>"
     }
   }
   if ($rows -eq "") { $rows = "<tr><td colspan='5' class='empty'>Folder ini masih kosong.</td></tr>" }
@@ -131,13 +144,13 @@ function Show-Listing($ctx, [string]$rel) {
   Send-Html $ctx $html 200
 }
 
-function Serve-File($ctx, $it) {
+function Serve-File($ctx, $it, [bool]$forceDownload = $false) {
   $ext = $it.Extension.ToLowerInvariant()
   $ct = "application/octet-stream"
   if ($mime.ContainsKey($ext)) { $ct = $mime[$ext] }
   $ctx.Response.ContentType = $ct
   $ctx.Response.ContentLength64 = $it.Length
-  if (-not $mime.ContainsKey($ext)) {
+  if ($forceDownload -or -not $mime.ContainsKey($ext)) {
     $ctx.Response.Headers["Content-Disposition"] = "attachment; filename*=UTF-8''" + [System.Uri]::EscapeDataString($it.Name)
   }
   $fs = $it.OpenRead()
@@ -217,6 +230,11 @@ try {
       if ($null -ne $dl) {
         $full = Get-SafePath $dl
         if ($null -eq $full) { Send-Error $ctx 403 "Akses ditolak"; continue }
+        if (-not (Test-Path -LiteralPath $full) -and -not [System.IO.Path]::HasExtension($full)) {
+          foreach ($ex in ".html", ".htm", ".txt", ".pdf", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".zip") {
+            if (Test-Path -LiteralPath ($full + $ex)) { $full = $full + $ex; break }
+          }
+        }
         if (-not (Test-Path -LiteralPath $full)) { Send-Error $ctx 404 "Tidak ditemukan"; continue }
         $it = Get-Item -LiteralPath $full -Force
         if ($it.PSIsContainer) {
@@ -225,7 +243,7 @@ try {
           $ctx.Response.OutputStream.Close()
           continue
         }
-        Serve-File $ctx $it
+        Serve-File $ctx $it $true
         continue
       }
 
@@ -263,14 +281,27 @@ try {
         continue
       }
 
+      if ($path -ne "/") {
+        $relPath = [System.Net.WebUtility]::UrlDecode($path).Trim("/")
+        $fullPath = Get-SafePath $relPath
+        if ($null -eq $fullPath) { Send-Error $ctx 403 "Akses ditolak"; continue }
+        if (Test-Path -LiteralPath $fullPath) {
+          $it = Get-Item -LiteralPath $fullPath -Force
+          if ($it.PSIsContainer) { Show-Listing $ctx $relPath } else { Serve-File $ctx $it $false }
+        } else {
+          Show-Listing-Fallback $ctx $fullPath
+        }
+        continue
+      }
+
       $rel = $q["p"]
       if ($null -eq $rel) { $rel = "" }
       $rel = $rel.TrimStart("/").TrimEnd("/")
       $full = Get-SafePath $rel
       if ($null -eq $full) { Send-Error $ctx 403 "Akses ditolak"; continue }
-      if (-not (Test-Path -LiteralPath $full)) { Send-Error $ctx 404 "Tidak ditemukan"; continue }
+      if (-not (Test-Path -LiteralPath $full)) { Show-Listing-Fallback $ctx $full; continue }
       $it = Get-Item -LiteralPath $full -Force
-      if (-not $it.PSIsContainer) { Serve-File $ctx $it; continue }
+      if (-not $it.PSIsContainer) { Serve-File $ctx $it $false; continue }
       Show-Listing $ctx $rel
     } catch {
       try {
