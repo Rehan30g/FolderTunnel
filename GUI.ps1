@@ -128,6 +128,7 @@ function Start-Download {
     param($dst, $hash)
     $url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
     $tmp = "$dst.download"
+    $errs = @()
     try {
       try { [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 } catch {}
       $curl = Join-Path $env:SystemRoot "System32\curl.exe"
@@ -137,25 +138,19 @@ function Start-Download {
           $m = ($head | Select-String -Pattern "content-length:\s*(\d+)" -AllMatches).Matches
           if ($m.Count -gt 0) { $hash.total = [long]$m[$m.Count - 1].Groups[1].Value }
         } catch {}
-        $null = & $curl -L -sS --retry 3 --retry-delay 2 --connect-timeout 20 -o $tmp $url 2>"$tmp.err"
-        if ($LASTEXITCODE -ne 0) { throw "curl exit code $LASTEXITCODE" }
-      } else {
-        $req = [System.Net.WebRequest]::Create($url)
-        $req.AllowAutoRedirect = $true
-        $req.Timeout = 30000
-        $resp = $req.GetResponse()
-        $hash.total = [long]$resp.ContentLength
-        $in = $resp.GetResponseStream()
-        $out = [System.IO.File]::Create($tmp)
-        $buf = New-Object byte[] 65536
-        while ($true) {
-          $n = $in.Read($buf, 0, $buf.Length)
-          if ($n -le 0) { break }
-          $out.Write($buf, 0, $n)
+        $null = & $curl -L -sS --retry 2 --retry-delay 2 --connect-timeout 20 -o $tmp $url 2>"$tmp.err"
+        if ($LASTEXITCODE -ne 0) {
+          $errs += "curl exit $LASTEXITCODE"
+          $ef = "$tmp.err"
+          if (Test-Path $ef) { $errs += (((Get-Content $ef -Tail 2 -ErrorAction SilentlyContinue) -join " | ")) }
         }
-        $out.Close(); $in.Close(); $resp.Close()
       }
-      if (-not (Test-Path $tmp) -or (Get-Item $tmp).Length -lt 1000000) { throw "file unduhan tidak lengkap" }
+      if (-not (Test-Path $tmp) -or (Get-Item $tmp -ErrorAction SilentlyContinue).Length -lt 1000000) {
+        $errs += "curl tidak lengkap, coba fallback..."
+        $ProgressPreference = "SilentlyContinue"
+        Invoke-WebRequest $url -OutFile $tmp -UseBasicParsing -TimeoutSec 300
+      }
+      if (-not (Test-Path $tmp) -or (Get-Item $tmp).Length -lt 1000000) { throw "file unduhan tidak lengkap. $($errs -join ' | ')" }
       if (Test-Path $dst) { Remove-Item $dst -Force }
       Move-Item $tmp $dst -Force
       $hash.ok = $true
@@ -165,6 +160,8 @@ function Start-Download {
       Remove-Item "$tmp.err" -Force -ErrorAction SilentlyContinue
     }
   }
+  $script:dlStart = Get-Date
+  $script:dlWarned = $false
   $script:dlPs = [powershell]::Create()
   $null = $script:dlPs.AddScript($sb).AddArgument($cloudflared).AddArgument($script:dlHash)
   $script:dlHandle = $script:dlPs.BeginInvoke()
@@ -246,19 +243,28 @@ $script:timer.Add_Tick({
       $r = 0
       if (Test-Path -LiteralPath $tmp) { $r = (Get-Item -LiteralPath $tmp -ErrorAction SilentlyContinue).Length }
       $t = [long]$script:dlHash.total
+      $el = [int]((Get-Date) - $script:dlStart).TotalSeconds
       if ($r -gt 0) {
+        $script:dlWarned = $false
         if ($t -gt 0) {
           $pct = [math]::Min(100, [int](100 * $r / $t))
           $script:PbDl.IsIndeterminate = $false
           $script:PbDl.Value = $pct
-          $script:LblDl.Text = ("Mengunduh cloudflared: {0:N1} MB / {1:N1} MB  ({2}%)" -f ($r / 1MB), ($t / 1MB), $pct)
+          $script:LblDl.Text = ("Mengunduh cloudflared: {0:N1} MB / {1:N1} MB  ({2}%)  [{3} dtk]" -f ($r / 1MB), ($t / 1MB), $pct, $el)
         } else {
           $script:PbDl.IsIndeterminate = $true
-          $script:LblDl.Text = ("Mengunduh cloudflared: {0:N1} MB terunduh..." -f ($r / 1MB))
+          $script:LblDl.Text = ("Mengunduh cloudflared: {0:N1} MB terunduh  [{1} dtk]" -f ($r / 1MB), $el)
         }
       } else {
         $script:PbDl.IsIndeterminate = $true
-        $script:LblDl.Text = "Menghubungkan ke github.com... (max ~35 dtk, gagal = otomatis retry)"
+        $script:LblDl.Text = "Menghubungkan ke github.com...  [$el dtk]"
+        if ($el -ge 45 -and -not $script:dlWarned) {
+          $script:dlWarned = $true
+          $ef = "$cloudflared.download.err"
+          $errTxt = ""
+          if (Test-Path $ef) { $errTxt = ((Get-Content $ef -Tail 2 -ErrorAction SilentlyContinue) -join " | ") }
+          Log "Koneksi lambat: $el dtk belum ada data. $errTxt"
+        }
       }
     }
     if ($script:dlHandle -and $script:dlHandle.IsCompleted) {
@@ -317,7 +323,6 @@ $script:timer.Add_Tick({
   } catch {}
 })
 
-if (-not (Test-Path -LiteralPath $cloudflared)) { Start-Download } else { Log "cloudflared siap." }
-
 Log "Folder Tunnel siap. Pilih folder, lalu klik 'Share ke INTERNET'."
+if (-not (Test-Path -LiteralPath $cloudflared)) { Start-Download } else { Log "cloudflared siap." }
 [void]$win.ShowDialog()
