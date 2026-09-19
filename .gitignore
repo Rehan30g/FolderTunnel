@@ -1,0 +1,8 @@
+cloudflared.exe
+server.pid
+tunnel.pid
+tunnel.url
+tunnel.err
+tunnel.out
+settings.bat
+shared/
