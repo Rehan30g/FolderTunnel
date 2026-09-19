@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WinTunnel</title>
+  <link rel="stylesheet" href="/assets/styles.css">
+  <script src="/assets/app.js" defer></script>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <h1>WinTunnel</h1>
+        <p>{{ITEM_COUNT}} tersedia untuk diakses.</p>
+      </div>
+      <span class="status">Aktif</span>
+    </header>
+    <section class="panel">
+      <nav class="pathbar" aria-label="Lokasi folder">{{BREADCRUMB}}</nav>
+      {{UPLOAD_SECTION}}
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Nama</th><th>Jenis</th><th class="size">Ukuran</th><th class="hide-mobile">Terakhir diubah</th><th class="actions">Tindakan</th></tr>
+          </thead>
+          <tbody>{{ROWS}}</tbody>
+        </table>
+      </div>
+    </section>
+    <footer class="footer">Dibagikan melalui WinTunnel.</footer>
+  </main>
+</body>
+</html>

@@ -3,14 +3,16 @@ param(
   [int]$Port = 8080,
   [string]$Password = "",
   [int]$AllowUpload = 0,
-  [int]$AllowDelete = 0
+  [int]$AllowDelete = 0,
+  [string]$RuntimeDir = $PSScriptRoot
 )
 
 $ErrorActionPreference = "Stop"
 $Root = [System.IO.Path]::GetFullPath($Root)
 if (-not (Test-Path -LiteralPath $Root)) { Write-Host "Folder tidak ditemukan: $Root"; Start-Sleep 5; exit 1 }
-
-$PID | Out-File -FilePath (Join-Path $PSScriptRoot "server.pid") -Encoding ascii
+$RuntimeDir = [System.IO.Path]::GetFullPath($RuntimeDir)
+if (-not (Test-Path -LiteralPath $RuntimeDir)) { New-Item -ItemType Directory -Path $RuntimeDir -Force | Out-Null }
+$pidFile = Join-Path $RuntimeDir "server.pid"
 
 $key = $null
 if ($Password -ne "") {
@@ -28,26 +30,16 @@ $mime = @{
   ".mp3"="audio/mpeg"; ".wav"="audio/wav"; ".mp4"="video/mp4"; ".webm"="video/webm"; ".mkv"="video/x-matroska"
 }
 
-$style = @'
-<style>
-body{font-family:'Segoe UI',Arial,sans-serif;background:#12141c;color:#e6e6e6;margin:0;padding:24px}
-h1{font-size:20px;margin:0 0 10px}
-a{color:#7ab7ff;text-decoration:none}
-a:hover{text-decoration:underline}
-table{border-collapse:collapse;width:100%;max-width:900px;margin-top:10px}
-td,th{padding:7px 10px;border-bottom:1px solid #2a2d3a;text-align:left;white-space:nowrap}
-th{color:#9aa0ae;font-size:12px;text-transform:uppercase}
-td.sz{color:#9aa0ae;text-align:right}
-.btn{background:#2f6fd6;color:#fff;border:0;padding:8px 14px;border-radius:6px;cursor:pointer;margin-top:8px}
-input[type=file]{margin-top:8px;color:#e6e6e6}
-input[type=password]{padding:8px;border-radius:6px;border:1px solid #444;background:#1b1e29;color:#fff}
-.crumb{margin:14px 0;font-size:14px}
-.note{margin-top:24px;color:#666;font-size:12px}
-</style>
-'@
+$webDir = Join-Path $PSScriptRoot "web"
+foreach ($required in "index.html", "login.html", "styles.css", "app.js") {
+  if (-not (Test-Path -LiteralPath (Join-Path $webDir $required))) { throw "File web tidak ditemukan: $required" }
+}
 
-function Send-Page($ctx, [string]$title, [string]$body, [int]$code = 200) {
-  $html = "<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>$(Esc $title)</title>" + $style + "</head><body>" + $body + "</body></html>"
+function Get-Template([string]$name) {
+  return Get-Content -LiteralPath (Join-Path $webDir $name) -Raw -Encoding UTF8
+}
+
+function Send-Html($ctx, [string]$html, [int]$code = 200) {
   $b = [System.Text.Encoding]::UTF8.GetBytes($html)
   $ctx.Response.StatusCode = $code
   $ctx.Response.ContentType = "text/html; charset=utf-8"
@@ -56,8 +48,20 @@ function Send-Page($ctx, [string]$title, [string]$body, [int]$code = 200) {
   $ctx.Response.OutputStream.Close()
 }
 
+function Send-Asset($ctx, [string]$name, [string]$contentType) {
+  $path = Join-Path $webDir $name
+  if (-not (Test-Path -LiteralPath $path)) { Send-Error $ctx 404 "Tidak ditemukan"; return }
+  $b = [System.IO.File]::ReadAllBytes($path)
+  $ctx.Response.StatusCode = 200
+  $ctx.Response.ContentType = $contentType
+  $ctx.Response.ContentLength64 = $b.Length
+  $ctx.Response.OutputStream.Write($b, 0, $b.Length)
+  $ctx.Response.OutputStream.Close()
+}
+
 function Send-Error($ctx, [int]$code, [string]$msg) {
   $ctx.Response.StatusCode = $code
+  $ctx.Response.ContentType = "text/plain; charset=utf-8"
   $b = [System.Text.Encoding]::UTF8.GetBytes($msg)
   $ctx.Response.ContentLength64 = $b.Length
   $ctx.Response.OutputStream.Write($b, 0, $b.Length)
@@ -88,13 +92,13 @@ function Test-Auth($ctx) {
 function Show-Listing($ctx, [string]$rel) {
   $full = Get-SafePath $rel
   $relNorm = $rel.Replace("\", "/").Trim("/")
-  $crumb = "<a href='/'>&#128193; [root]</a>"
+  $crumb = "<a href='/'>Folder utama</a>"
   if ($relNorm) {
     $acc = ""
     foreach ($seg in $relNorm.Split("/")) {
       if ($seg -eq "") { continue }
       if ($acc) { $acc = $acc + "/" + $seg } else { $acc = $seg }
-      $crumb += " / <a href='?p=$([System.Uri]::EscapeDataString($acc))'>$(Esc $seg)</a>"
+      $crumb += "<span class='sep'>/</span><a href='?p=$([System.Uri]::EscapeDataString($acc))'>$(Esc $seg)</a>"
     }
   }
   $rows = ""
@@ -102,25 +106,29 @@ function Show-Listing($ctx, [string]$rel) {
   foreach ($it in $items) {
     $r = if ($relNorm) { $relNorm + "/" + $it.Name } else { $it.Name }
     $er = [System.Uri]::EscapeDataString($r)
+    $changed = $it.LastWriteTime.ToString("yyyy-MM-dd HH:mm")
     if ($it.PSIsContainer) {
-      $rows += "<tr><td><a href='?p=$er'>&#128193; $(Esc $it.Name)</a></td><td class='sz'>folder</td><td></td></tr>"
+      $rows += "<tr><td class='name'><a href='?p=$er'>$(Esc $it.Name)</a></td><td><span class='type'>Folder</span></td><td class='meta size'>&mdash;</td><td class='meta hide-mobile'>$changed</td><td class='actions'><a class='action' href='?p=$er'>Buka</a></td></tr>"
     } else {
       $sz = if ($it.Length -ge 1MB) { "{0:N1} MB" -f ($it.Length / 1MB) } elseif ($it.Length -ge 1KB) { "{0:N1} KB" -f ($it.Length / 1KB) } else { "$($it.Length) B" }
-      $del = ""
+      $actions = "<a class='action' href='?dl=$er'>Unduh</a>"
       if ($AllowDelete -eq 1) {
-        $del = "<td><a href='?del=$er' onclick=`"return confirm('Hapus $($it.Name)?')`" style='color:#ff7b7b'>[hapus]</a></td>"
+        $actions += "<a class='action danger' href='?del=$er' onclick=`"return confirm('Hapus file ini?')`">Hapus</a>"
       }
-      $rows += "<tr><td><a href='?dl=$er'>$(Esc $it.Name)</a></td><td class='sz'>$sz</td>$del</tr>"
+      $extLabel = if ($it.Extension) { $it.Extension.TrimStart(".").ToUpperInvariant() } else { "File" }
+      $rows += "<tr><td class='name'><a href='?dl=$er'>$(Esc $it.Name)</a></td><td><span class='type'>$(Esc $extLabel)</span></td><td class='meta size'>$sz</td><td class='meta hide-mobile'>$changed</td><td class='actions'>$actions</td></tr>"
     }
   }
-  if ($rows -eq "") { $rows = "<tr><td colspan='3' style='color:#888'>(folder kosong)</td></tr>" }
+  if ($rows -eq "") { $rows = "<tr><td colspan='5' class='empty'>Folder ini masih kosong.</td></tr>" }
   $up = ""
   if ($AllowUpload -eq 1) {
     $enc = [System.Uri]::EscapeDataString($relNorm)
-    $up = "<p><input type='file' id='f'><button class='btn' onclick='up()'>Upload ke sini</button></p><script>function up(){var f=document.getElementById('f').files[0];if(!f)return;fetch('upload?p=$enc&name='+encodeURIComponent(f.name),{method:'PUT',body:f}).then(function(r){if(r.ok){location.reload()}else{r.text().then(function(t){alert(t)})}})}</script>"
+    $up = "<section class='upload' data-upload-path='$enc'><p class='upload-title'>Upload file</p><div class='upload-row'><input type='file' id='fileInput'><button class='btn' id='uploadButton' type='button'>Upload ke folder ini</button></div><div class='progress' id='uploadProgress'><span id='uploadBar'></span></div><div class='upload-status' id='uploadStatus'>Pilih satu file untuk diupload.</div></section>"
   }
-  $body = "<h1>&#128230; Folder Tunnel</h1><div class='crumb'>$crumb</div>$up<table><tr><th>Nama</th><th>Ukuran</th><th></th></tr>$rows</table><p class='note'>Folder Tunnel &mdash; folder: $(Esc $Root)</p>"
-  Send-Page $ctx "Folder Tunnel" $body 200
+  $countText = if ($items.Count -eq 1) { "1 item" } else { "$($items.Count) item" }
+  $html = Get-Template "index.html"
+  $html = $html.Replace("{{ITEM_COUNT}}", $countText).Replace("{{BREADCRUMB}}", $crumb).Replace("{{UPLOAD_SECTION}}", $up).Replace("{{ROWS}}", $rows)
+  Send-Html $ctx $html 200
 }
 
 function Serve-File($ctx, $it) {
@@ -146,8 +154,9 @@ function Serve-File($ctx, $it) {
 $listener = New-Object System.Net.HttpListener
 $listener.Prefixes.Add("http://localhost:$Port/")
 try { $listener.Start() } catch { Write-Host "GAGAL: $($_.Exception.Message)"; Start-Sleep 5; exit 1 }
+$PID | Out-File -FilePath $pidFile -Encoding ascii
 
-Write-Host "=== FOLDER TUNNEL - SERVER ==="
+Write-Host "=== WINTUNNEL SERVER ==="
 Write-Host "Folder  : $Root"
 Write-Host "Lokal   : http://localhost:$Port/"
 if ($key) { Write-Host "Password: AKTIF" } else { Write-Host "Password: TIDAK ADA (siapa pun dengan URL bisa akses!)" }
@@ -163,6 +172,9 @@ try {
       $req = $ctx.Request
       $q = $req.QueryString
       $path = $req.Url.AbsolutePath
+
+      if ($path -eq "/assets/styles.css") { Send-Asset $ctx "styles.css" "text/css; charset=utf-8"; continue }
+      if ($path -eq "/assets/app.js") { Send-Asset $ctx "app.js" "text/javascript; charset=utf-8"; continue }
 
       if ($path -eq "/login") {
         if ($null -eq $key) {
@@ -184,10 +196,12 @@ try {
             $ctx.Response.RedirectLocation = "/"
             $ctx.Response.OutputStream.Close()
           } else {
-            Send-Page $ctx "Login" ("<h1>&#128274; Folder Tunnel</h1><p style='color:#ff7b7b'>Password salah.</p><form method='post' action='/login'><input type='password' name='pw' autofocus> <button class='btn'>Masuk</button></form>") 401
+            $html = (Get-Template "login.html").Replace("{{MESSAGE_CLASS}}", "error").Replace("{{MESSAGE}}", "Password salah. Silakan coba kembali.")
+            Send-Html $ctx $html 401
           }
         } else {
-          Send-Page $ctx "Login" ("<h1>&#128274; Folder Tunnel</h1><p>Folder ini dilindungi password.</p><form method='post' action='/login'><input type='password' name='pw' autofocus> <button class='btn'>Masuk</button></form>") 401
+          $html = (Get-Template "login.html").Replace("{{MESSAGE_CLASS}}", "").Replace("{{MESSAGE}}", "Folder ini dilindungi password.")
+          Send-Html $ctx $html 401
         }
         continue
       }
@@ -242,7 +256,7 @@ try {
           $fs = [System.IO.File]::Create($target)
           $req.InputStream.CopyTo($fs)
           $fs.Close()
-          Send-Page $ctx "OK" ("<h1>Berhasil</h1><p>File '$(Esc $name)' terupload. <a href='javascript:history.back()'>Kembali</a></p>") 200
+          Send-Error $ctx 200 "Upload selesai."
         } catch {
           Send-Error $ctx 500 ("Gagal simpan: " + $_.Exception.Message)
         }
@@ -269,5 +283,5 @@ try {
   }
 } finally {
   try { $listener.Stop() } catch {}
-  Remove-Item (Join-Path $PSScriptRoot "server.pid") -ErrorAction SilentlyContinue
+  Remove-Item $pidFile -ErrorAction SilentlyContinue
 }

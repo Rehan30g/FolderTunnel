@@ -1,4 +1,5 @@
 cloudflared.exe
+cloudflared.exe.invalid
 *.download
 server.pid
 tunnel.pid
@@ -11,3 +12,8 @@ settings.json
 settings.bat
 shared/
 *.download.err
+update-state.json
+update.log
+.update-backup/
+WinTunnel Internet.url
+data/*

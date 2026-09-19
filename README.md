@@ -1,14 +1,14 @@
-# Folder Tunnel
+# WinTunnel
 
 Aplikasi portable Windows untuk membagikan (share) sebuah folder ke internet lewat browser — **tanpa install apa-apa**.
 
-Cukup **extract & jalankan `FolderTunnel.bat`** → muncul window GUI. Tidak perlu Python, Node, atau web server tambahan. Server file berjalan di PowerShell bawaan Windows, dan tunneling publik memakai **cloudflared** (Quick Tunnel / `trycloudflare.com`, gratis tanpa daftar akun).
+Cukup **extract dan jalankan `start.bat`** lalu GUI muncul tanpa terminal. Tidak perlu Python, Node, atau web server tambahan. Server file berjalan di PowerShell bawaan Windows, dan tunneling publik memakai **cloudflared** (Quick Tunnel / `trycloudflare.com`, gratis tanpa daftar akun).
 
 ## Fitur
 
 - **GUI Window** (WPF bawaan Windows, tanpa install)
 - Pilih folder yang mau di-share **lewat dialog file explorer**
-- Auto-download `cloudflared.exe` saat aplikasi pertama dibuka (portable, tidak perlu install)
+- Auto-download `cloudflared.exe` saat pertama kali memilih berbagi ke internet, dengan progres dan hasil verifikasi yang jelas
 - URL publik `https://xxxx.trycloudflare.com` langsung tampil di GUI
 - Tampilan file manager di browser (navigasi folder, download file)
 - Upload file dari browser (bisa diaktifkan/dimatikan)
@@ -17,13 +17,15 @@ Cukup **extract & jalankan `FolderTunnel.bat`** → muncul window GUI. Tidak per
 - Anti directory-traversal (akses dibatasi hanya di folder yang di-share)
 - Start / stop server & tunnel dari GUI
 - Log aktivitas real-time di GUI
+- Pemeriksaan update otomatis dari GitHub saat aplikasi dibuka
+- Popup update terpisah yang menampilkan ringkasan fitur/perbaikan sebelum pengguna memilih update atau nanti
 
 ## Cara pakai
 
-1. Jalankan `FolderTunnel.bat` (cloudflared otomatis diunduh sekali saat pertama dibuka)
-2. Klik **Pilih folder...** → pilih folder lewat file explorer
+1. Jalankan `start.bat`
+2. Klik **Pilih folder** → pilih folder lewat file explorer
 3. (Opsional) isi password, centang izin upload/hapus
-4. Klik **Share ke INTERNET**
+4. Klik **Bagikan ke internet**
 5. URL publik muncul di kotak "URL PUBLIK" — bagikan ke siapa pun
 6. Klik **Stop semua** untuk menghentikan
 
@@ -33,12 +35,12 @@ Cukup **extract & jalankan `FolderTunnel.bat`** → muncul window GUI. Tidak per
 
 | File | Fungsi |
 |---|---|
-| `FolderTunnel.bat` | Launcher GUI |
-| `GUI.ps1` | Window GUI (WPF) + kontrol server/tunnel |
-| `server.ps1` | HTTP file server (PowerShell bawaan) |
-| `tunnel.ps1` | Launcher tunnel cloudflared |
+| `start.bat` | Launcher utama |
+| `WinTunnel Internet.url` | Shortcut menuju URL publik aktif terbaru |
+| `app/` | Kode aplikasi, updater, serta file web HTML/CSS/JavaScript |
+| `data/` | Konfigurasi, cloudflared, backup update, dan folder `logs/` |
 
-File yang dibuat saat runtime (tidak perlu di-commit): `settings.json`, `cloudflared.exe`, `server.pid`, `tunnel.pid`, `tunnel.url`, `server.log/err`, `tunnel.out/err`.
+File runtime disimpan terpisah di dalam `data/`, sehingga folder utama tetap ringkas.
 
 ## Catatan
 
