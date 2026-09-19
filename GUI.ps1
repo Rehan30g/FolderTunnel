@@ -138,7 +138,7 @@ function Start-Download {
           $m = ($head | Select-String -Pattern "content-length:\s*(\d+)" -AllMatches).Matches
           if ($m.Count -gt 0) { $hash.total = [long]$m[$m.Count - 1].Groups[1].Value }
         } catch {}
-        $null = & $curl -L -sS --retry 2 --retry-delay 2 --connect-timeout 20 -o $tmp $url 2>"$tmp.err"
+        $null = & $curl -L -sS --retry 2 --retry-delay 2 --connect-timeout 20 --speed-time 30 --speed-limit 2048 --max-time 300 -o $tmp $url 2>"$tmp.err"
         if ($LASTEXITCODE -ne 0) {
           $errs += "curl exit $LASTEXITCODE"
           $ef = "$tmp.err"
@@ -266,20 +266,43 @@ $script:timer.Add_Tick({
           Log "Koneksi lambat: $el dtk belum ada data. $errTxt"
         }
       }
-    }
-    if ($script:dlHandle -and $script:dlHandle.IsCompleted) {
-      $null = $script:dlPs.EndInvoke($script:dlHandle)
-      $script:BtnInternet.IsEnabled = $true
-      $script:dlPs = $null
-      $script:dlHandle = $null
-      $script:PnlDl.Visibility = "Collapsed"
-      $script:PbDl.Value = 0
-      $script:PbDl.IsIndeterminate = $false
-      if ($script:dlHash.error) {
-        Log "GAGAL download cloudflared: $($script:dlHash.error)"
-      } else {
-        Log "cloudflared siap dipakai."
+      if ((Test-Path -LiteralPath $cloudflared) -and ((Get-Item -LiteralPath $cloudflared -ErrorAction SilentlyContinue).Length -gt 1000000)) {
+        try { $script:dlPs.Stop() } catch {}
+        $script:dlPs = $null
+        $script:dlHandle = $null
+        $script:PnlDl.Visibility = "Collapsed"
+        $script:PbDl.Value = 0
+        $script:PbDl.IsIndeterminate = $false
+        $script:BtnInternet.IsEnabled = $true
+        Log "cloudflared terdeteksi siap di folder aplikasi."
         if ($script:pendingInternet) { $script:pendingInternet = $false; Start-Tunnel }
+      } elseif ($script:dlHandle -and $script:dlHandle.IsCompleted) {
+        try { $null = $script:dlPs.EndInvoke($script:dlHandle) } catch {}
+        $script:dlPs = $null
+        $script:dlHandle = $null
+        $script:PnlDl.Visibility = "Collapsed"
+        $script:PbDl.Value = 0
+        $script:PbDl.IsIndeterminate = $false
+        $script:BtnInternet.IsEnabled = $true
+        if ($script:dlHash.error) {
+          Log "GAGAL download cloudflared: $($script:dlHash.error)"
+        } else {
+          Log "cloudflared siap dipakai."
+          if ($script:pendingInternet) { $script:pendingInternet = $false; Start-Tunnel }
+        }
+      } else {
+        if ($r -eq $script:dlLastSize) { $script:dlStallTicks++ } else { $script:dlStallTicks = 0; $script:dlLastSize = $r }
+        if ($script:dlStallTicks -gt 75) {
+          try { $script:dlPs.Stop() } catch {}
+          $script:dlPs = $null
+          $script:dlHandle = $null
+          $script:PnlDl.Visibility = "Collapsed"
+          $script:PbDl.Value = 0
+          $script:PbDl.IsIndeterminate = $false
+          $script:BtnInternet.IsEnabled = $true
+          Remove-Item "$cloudflared.download" -Force -ErrorAction SilentlyContinue
+          Log "Download macet (60+ dtk tanpa data) - dihentikan. Klik 'Share ke INTERNET' untuk coba lagi."
+        }
       }
     }
     if ($script:waitingUrl) {
