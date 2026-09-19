@@ -38,7 +38,10 @@ try {
     </WrapPanel>
     <StackPanel Name="PnlDl" Visibility="Collapsed" Margin="0,0,0,12">
       <TextBlock Name="LblDl" Text="Mengunduh cloudflared..." Foreground="#374151" FontSize="11" Margin="0,0,0,3"/>
-      <ProgressBar Name="PbDl" Height="14" Minimum="0" Maximum="100"/>
+      <DockPanel>
+        <Button Name="BtnSkip" Content="Lewati download" Width="130" Height="24" DockPanel.Dock="Right" Margin="8,0,0,0" FontSize="11"/>
+        <ProgressBar Name="PbDl" Height="14" Minimum="0" Maximum="100"/>
+      </DockPanel>
     </StackPanel>
     <Border Background="White" BorderBrush="#2563EB" BorderThickness="1" CornerRadius="4" Padding="10" Margin="0,0,0,12">
       <StackPanel>
@@ -54,7 +57,7 @@ try {
 
 $reader = New-Object System.Xml.XmlNodeReader $xamlDoc
 $win = [System.Windows.Markup.XamlReader]::Load($reader)
-foreach ($n in "BtnBrowse","TxtFolder","PwPass","ChkUpload","ChkDelete","BtnInternet","BtnLocal","BtnStop","BtnOpen","LblUrl","TxtLog","PnlDl","PbDl","LblDl") {
+foreach ($n in "BtnBrowse","TxtFolder","PwPass","ChkUpload","ChkDelete","BtnInternet","BtnLocal","BtnStop","BtnOpen","LblUrl","TxtLog","PnlDl","PbDl","LblDl","BtnSkip") {
   Set-Variable -Name $n -Value $win.FindName($n) -Scope Script
 }
 
@@ -184,6 +187,23 @@ function Stop-All([switch]$Quiet) {
   if (-not $Quiet) { Log "Semua server & tunnel dihentikan." }
 }
 
+function Stop-Download([switch]$Quiet) {
+  if ($script:dlPs) {
+    try { $script:dlPs.Stop() } catch {}
+    $script:dlPs = $null
+    $script:dlHandle = $null
+    Remove-Item "$cloudflared.download" -Force -ErrorAction SilentlyContinue
+    Remove-Item "$cloudflared.download.err" -Force -ErrorAction SilentlyContinue
+  }
+  $script:pendingInternet = $false
+  $script:PnlDl.Visibility = "Collapsed"
+  $script:PbDl.Value = 0
+  $script:PbDl.IsIndeterminate = $false
+  if (-not $Quiet) { Log "Download dilewati. Mode lokal tetap bisa dipakai; klik 'Share ke INTERNET' nanti untuk coba download lagi." }
+}
+
+$BtnSkip.Add_Click({ Stop-Download })
+
 $BtnBrowse.Add_Click({
   $dlg = New-Object System.Windows.Forms.FolderBrowserDialog
   $dlg.Description = "Pilih folder yang mau di-share ke internet"
@@ -257,7 +277,7 @@ $script:timer.Add_Tick({
         }
       } else {
         $script:PbDl.IsIndeterminate = $true
-        $script:LblDl.Text = "Menghubungkan ke github.com...  [$el dtk]"
+        $script:LblDl.Text = "Menghubungkan ke github.com...  [$el dtk]  (klik 'Lewati download' jika ingin mode lokal saja)"
         if ($el -ge 45 -and -not $script:dlWarned) {
           $script:dlWarned = $true
           $ef = "$cloudflared.download.err"
