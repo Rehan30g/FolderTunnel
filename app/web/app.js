@@ -15,6 +15,8 @@
     archive: 'M4 3h16v18H4zM10 3v3h4v3h-4v3h4v3h-4v4h4v-4',
     sheet: 'M4 3h16v18H4zM4 9h16M4 15h16M10 9v12',
     download: 'M12 3v12M7 10l5 5 5-5M4 16v5h16v-5',
+    upload: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12',
+    close: 'M6 6l12 12M18 6l-12 12',
     trash: 'M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7',
     open: 'M9 5l7 7-7 7'
   };
@@ -49,6 +51,11 @@
     document.getElementById('itemCount').textContent = count + ' item';
     document.getElementById('noResults').hidden = count > 0 || !search.value;
   });
+  var searchToggle = document.getElementById('searchToggle');
+  if (searchToggle && search) searchToggle.onclick = function () {
+    var open = document.body.classList.toggle('search-open');
+    if (open) { search.focus(); } else if (search.value) { search.value = ''; search.dispatchEvent(new Event('input')); }
+  };
   function setView(view) {
     document.body.dataset.view = view;
     document.getElementById('listView').setAttribute('aria-pressed', view === 'list');
@@ -62,6 +69,22 @@
     density.onchange = function () { document.body.dataset.density = density.value; try { localStorage.setItem('wintunnel-density', density.value); } catch (_) {} };
     try { setView(localStorage.getItem('wintunnel-view') || 'list'); density.value = localStorage.getItem('wintunnel-density') || (innerWidth < 700 ? 'compact' : 'comfortable'); } catch (_) {}
     density.onchange();
+  }
+
+  var uploadOpen = document.getElementById('uploadOpen');
+  var uploadModal = document.getElementById('uploadModal');
+  var uploadSection = document.querySelector('.upload');
+  if (uploadOpen && uploadModal) {
+    if (!uploadSection) { uploadOpen.hidden = true; }
+    else {
+      var uploadHome = uploadSection.parentElement, uploadNext = uploadSection.nextSibling;
+      var modalBody = uploadModal.querySelector('.modal-body');
+      var hideUpload = function () { uploadModal.hidden = true; document.body.classList.remove('modal-open'); uploadHome.insertBefore(uploadSection, uploadNext); };
+      uploadOpen.onclick = function () { modalBody.appendChild(uploadSection); uploadModal.hidden = false; document.body.classList.add('modal-open'); };
+      document.getElementById('uploadClose').onclick = hideUpload;
+      uploadModal.addEventListener('click', function (e) { if (e.target === uploadModal) hideUpload(); });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !uploadModal.hidden) hideUpload(); });
+    }
   }
 
   var section = document.querySelector(".upload");

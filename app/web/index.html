@@ -18,7 +18,7 @@
     </header>
     <section class="panel">
       <div class="navigation"><button class="icon-button" id="backButton" aria-label="Kembali ke folder induk" title="Folder induk" disabled><span data-icon="back"></span></button><button class="icon-button" id="refreshButton" aria-label="Muat ulang" title="Muat ulang"><span data-icon="refresh"></span></button><nav class="pathbar" aria-label="Lokasi folder">{{BREADCRUMB}}</nav></div>
-      <div class="toolbar"><label class="search"><span data-icon="search"></span><input id="searchInput" type="search" placeholder="Cari di folder ini" aria-label="Cari di folder ini"></label><div class="view-controls" aria-label="Tampilan"><button class="icon-button" id="listView" aria-label="Tampilan daftar" title="Daftar" aria-pressed="true"><span data-icon="list"></span></button><button class="icon-button" id="gridView" aria-label="Tampilan ikon" title="Ikon" aria-pressed="false"><span data-icon="grid"></span></button></div><select id="density" aria-label="Ukuran tampilan"><option value="comfortable">Nyaman</option><option value="compact">Ringkas</option></select></div>
+      <div class="toolbar"><button class="icon-button mobile-only" id="searchToggle" aria-label="Cari di folder ini" title="Cari"><span data-icon="search"></span></button><label class="search"><span data-icon="search"></span><input id="searchInput" type="search" placeholder="Cari di folder ini" aria-label="Cari di folder ini"></label><div class="view-controls" aria-label="Tampilan"><button class="icon-button" id="listView" aria-label="Tampilan daftar" title="Daftar" aria-pressed="true"><span data-icon="list"></span></button><button class="icon-button" id="gridView" aria-label="Tampilan ikon" title="Ikon" aria-pressed="false"><span data-icon="grid"></span></button></div><select id="density" aria-label="Ukuran tampilan"><option value="comfortable">Nyaman</option><option value="compact">Ringkas</option></select><button class="icon-button mobile-only" id="uploadOpen" aria-label="Upload file" title="Upload"><span data-icon="upload"></span></button></div>
       {{UPLOAD_SECTION}}
       <div class="table-wrap">
         <table>
@@ -31,6 +31,7 @@
       <p id="noResults" class="empty" hidden>Tidak ada file yang cocok.</p>
       <div class="statusbar"><span id="itemCount">{{ITEM_COUNT}}</span><span>WinTunnel</span></div>
     </section>
+    <div class="modal-backdrop" id="uploadModal" hidden><div class="modal" role="dialog" aria-modal="true" aria-label="Upload file"><div class="modal-head"><h2>Upload file</h2><button class="icon-button" id="uploadClose" aria-label="Tutup" title="Tutup"><span data-icon="close"></span></button></div><div class="modal-body"></div></div></div>
     <footer class="footer">Dibagikan melalui WinTunnel.</footer>
   </main>
 </body>
