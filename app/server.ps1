@@ -102,7 +102,7 @@ function Show-Listing($ctx, [string]$rel) {
     }
   }
   $rows = ""
-  $items = @(Get-ChildItem -LiteralPath $full -Force | Sort-Object @{Expression={!$_.PSIsContainer};Descending=$true}, Name)
+  $items = @(Get-ChildItem -LiteralPath $full -Force | Sort-Object @{Expression={$_.PSIsContainer};Descending=$true}, Name)
   foreach ($it in $items) {
     $r = if ($relNorm) { $relNorm + "/" + $it.Name } else { $it.Name }
     $er = [System.Uri]::EscapeDataString($r)
