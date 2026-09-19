@@ -1,8 +1,12 @@
 cloudflared.exe
+*.download
 server.pid
 tunnel.pid
 tunnel.url
 tunnel.err
 tunnel.out
+server.log
+server.err
+settings.json
 settings.bat
 shared/
