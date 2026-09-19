@@ -6,6 +6,14 @@ $cloudflared = Join-Path $here "cloudflared.exe"
 Add-Type -AssemblyName PresentationFramework
 Add-Type -AssemblyName System.Windows.Forms
 
+try {
+  Add-Type -Namespace FT -Name Win -MemberDefinition @"
+[DllImport("user32.dll")] public static extern bool ShowWindow(System.IntPtr hWnd, int nCmdShow);
+"@
+  $h = (Get-Process -Id $PID).MainWindowHandle
+  if ($h -ne [IntPtr]::Zero) { [void][FT.Win]::ShowWindow($h, 0) }
+} catch {}
+
 [xml]$xamlDoc = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         Title="Folder Tunnel" Height="560" Width="620" WindowStartupLocation="CenterScreen"
@@ -99,7 +107,8 @@ function Start-Server {
 function Start-Tunnel {
   $script:waitingUrl = $true
   $script:urlTries = 0
-  Log "Membuat URL publik (trycloudflare)..."
+  $script:BtnInternet.IsEnabled = $false
+  Log "Membuat URL publik (trycloudflare), mohon tunggu..."
   Start-Process powershell -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", (Join-Path $here "tunnel.ps1"), "-Port", "$script:Port") -WindowStyle Hidden | Out-Null
 }
 
@@ -136,6 +145,7 @@ function Stop-All([switch]$Quiet) {
   $script:LblUrl.Text = "belum aktif"
   $script:BtnOpen.IsEnabled = $false
   $script:waitingUrl = $false
+  if (-not $script:dlPs) { $script:BtnInternet.IsEnabled = $true }
   if (-not $Quiet) { Log "Semua server & tunnel dihentikan." }
 }
 
@@ -211,20 +221,26 @@ $script:timer.Add_Tick({
     }
     if ($script:waitingUrl) {
       $script:urlTries++
-      $uf = Join-Path $here "tunnel.url"
-      if (Test-Path -LiteralPath $uf) {
-        $u = ([string](Get-Content -LiteralPath $uf -First 1 -ErrorAction SilentlyContinue)).Trim()
-        if ($u -match "trycloudflare\.com") {
-          $script:waitingUrl = $false
-          $script:LblUrl.Text = $u
-          $script:BtnOpen.IsEnabled = $true
-          $script:BtnInternet.IsEnabled = $true
-          Log "URL PUBLIK: $u"
-        }
-      } elseif ($script:urlTries -gt 75) {
+      $txt = ""
+      foreach ($f in "tunnel.err", "tunnel.out") {
+        $fp = Join-Path $here $f
+        if (Test-Path -LiteralPath $fp) { $txt += [string](Get-Content -LiteralPath $fp -Raw -ErrorAction SilentlyContinue) }
+      }
+      if ($txt -match "https://[a-zA-Z0-9-]+\.trycloudflare\.com") {
+        $u = $Matches[0]
+        $script:waitingUrl = $false
+        $script:LblUrl.Text = $u
+        $script:BtnOpen.IsEnabled = $true
+        $script:BtnInternet.IsEnabled = $true
+        $u | Out-File (Join-Path $here "tunnel.url") -Encoding ascii
+        Log "URL PUBLIK: $u"
+      } elseif ($script:urlTries -gt 225) {
         $script:waitingUrl = $false
         $script:BtnInternet.IsEnabled = $true
-        Log "Gagal dapat URL (timeout). Cek internet, lalu klik Share lagi."
+        $ef = Join-Path $here "tunnel.err"
+        $tail = ""
+        if (Test-Path $ef) { $tail = ((Get-Content $ef -Tail 3 -ErrorAction SilentlyContinue) -join " ") }
+        Log "GAGAL dapat URL (timeout 3 menit). $tail"
       }
     }
     if ($script:serverCheckTicks -ge 0) {

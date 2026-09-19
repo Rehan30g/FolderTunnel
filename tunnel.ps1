@@ -7,12 +7,12 @@ foreach ($f in @("tunnel.err", "tunnel.out", "tunnel.url")) {
   Remove-Item (Join-Path $here $f) -ErrorAction SilentlyContinue
 }
 
-$p = Start-Process -FilePath $exe -ArgumentList "tunnel", "--url", "http://localhost:$Port", "--http-host-header", "localhost", "--no-autoupdate" -WorkingDirectory $here -RedirectStandardOutput (Join-Path $here "tunnel.out") -RedirectStandardError (Join-Path $here "tunnel.err") -PassThru
+$p = Start-Process -FilePath $exe -ArgumentList "tunnel", "--url", "http://localhost:$Port", "--http-host-header", "localhost", "--protocol", "http2", "--no-autoupdate" -WorkingDirectory $here -RedirectStandardOutput (Join-Path $here "tunnel.out") -RedirectStandardError (Join-Path $here "tunnel.err") -PassThru
 $p.Id | Out-File (Join-Path $here "tunnel.pid") -Encoding ascii
 
 Write-Host "Menunggu URL publik dari trycloudflare..."
 $url = $null
-for ($i = 0; $i -lt 45; $i++) {
+for ($i = 0; $i -lt 120; $i++) {
   Start-Sleep -Seconds 1
   $txt = ""
   foreach ($f in @("tunnel.err", "tunnel.out")) {
